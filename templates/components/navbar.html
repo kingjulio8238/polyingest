@@ -1,0 +1,44 @@
+<nav class="bg-white shadow-sm border-b border-warm-gray-200">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center h-16">
+            <!-- Logo/Brand -->
+            <div class="flex items-center space-x-3">
+                <div class="text-2xl">📊</div>
+                <a href="/" class="text-xl font-bold text-warm-gray-900 hover:text-primary transition-colors">
+                    PolyIngest
+                </a>
+            </div>
+            
+            <!-- Navigation Links -->
+            <div class="hidden md:flex items-center space-x-6">
+                <a href="/" class="text-warm-gray-600 hover:text-warm-gray-900 transition-colors">
+                    Home
+                </a>
+                <a href="/health" class="text-warm-gray-600 hover:text-warm-gray-900 transition-colors">
+                    Status
+                </a>
+                <a href="https://github.com/polymarket" target="_blank" class="text-warm-gray-600 hover:text-warm-gray-900 transition-colors">
+                    Polymarket
+                </a>
+            </div>
+            
+            <!-- Mobile menu button -->
+            <div class="md:hidden">
+                <button id="mobile-menu-button" class="text-warm-gray-600 hover:text-warm-gray-900">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Mobile menu -->
+        <div id="mobile-menu" class="hidden md:hidden pb-4">
+            <div class="flex flex-col space-y-2">
+                <a href="/" class="text-warm-gray-600 hover:text-warm-gray-900 py-2">Home</a>
+                <a href="/health" class="text-warm-gray-600 hover:text-warm-gray-900 py-2">Status</a>
+                <a href="https://github.com/polymarket" target="_blank" class="text-warm-gray-600 hover:text-warm-gray-900 py-2">Polymarket</a>
+            </div>
+        </div>
+    </div>
+</nav>

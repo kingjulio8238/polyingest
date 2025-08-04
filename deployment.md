@@ -14,7 +14,7 @@
 
 3. **Test the Application**
    - Visit `http://localhost:8000` for usage instructions
-   - Test with: `http://localhost:8000/US recession in 2025`
+   - Test with: `http://localhost:8000/event/presidential-election-winner-2028?tid=1754301474937`
    - Health check: `http://localhost:8000/health`
 
 ## Deployment Options
@@ -40,12 +40,12 @@
 
 1. **Build Image**
    ```bash
-   docker build -t hashingest .
+   docker build -t polyingest .
    ```
 
 2. **Run Container**
    ```bash
-   docker run -p 8000:8000 hashingest
+   docker run -p 8000:8000 polyingest
    ```
 
 3. **Deploy to Cloud**
@@ -82,12 +82,12 @@
 ### Rate Limiting
 - The application implements a 1-minute rate limit per market
 - Responses are cached for 5 minutes
-- Respect Hashdive's terms of service
+- Respect Polymarket's terms of service
 
 ### HTML Selectors
-- **CRITICAL**: The current HTML selectors are placeholders
-- Before production deployment, inspect actual Hashdive pages
-- Update the `extract_market_data()` function with real CSS selectors
+- **CRITICAL**: The current HTML selectors are optimized for Polymarket's React structure
+- Before production deployment, test with various Polymarket market pages
+- Update the `extract_market_data()` function if Polymarket changes their layout
 - Test thoroughly with actual market pages
 
 ### Monitoring

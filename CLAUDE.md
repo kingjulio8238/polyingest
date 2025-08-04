@@ -4,24 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-HashIngest is a web scraping application that mirrors the functionality of "GitIngest" but for Hashdive market analysis. The application provides a GitIngest-like experience where users simply replace `hashdive.com` with `hashingest.com` in any Hashdive market URL.
+PolyIngest is a web scraping application that mirrors the functionality of "GitIngest" but for Polymarket prediction markets. The application provides a GitIngest-like experience where users simply replace `polymarket.com` with `polyingest.com` in any Polymarket URL.
 
 **Production Usage**:
-- User finds market on Hashdive: `https://hashdive.com/Analyze_Market?market=Xi+Jinping+out+in+2025%3F`
-- User changes URL to: `https://hashingest.com/Analyze_Market?market=Xi+Jinping+out+in+2025%3F`
-- HashIngest returns formatted plain text optimized for LLM consumption
+- User finds market on Polymarket: `https://polymarket.com/event/presidential-election-winner-2028?tid=1754301474937`
+- User changes URL to: `https://polyingest.com/event/presidential-election-winner-2028?tid=1754301474937`
+- PolyIngest returns formatted plain text optimized for LLM consumption
 
 **Features**:
-- Direct URL replacement workflow (no complex routing needed)
-- Scrapes dynamic Streamlit content from Hashdive
-- Extracts market data (probabilities, trading volume, liquidity, positions, trends)
+- Direct URL replacement workflow (mirrors Polymarket URL structure)
+- Scrapes dynamic React content from Polymarket
+- Extracts market data (Yes/No probabilities, trading volume, liquidity, outcomes)
 - Rate limiting and caching for respectful usage
-- Fallback support for simple market names
+- Support for full Polymarket event URLs with parameters
 
 ## Technical Stack
 
 - **Framework**: FastAPI for the web server
-- **Scraping**: Selenium with headless Chrome for dynamic content + BeautifulSoup for parsing
+- **Scraping**: Selenium with headless Chrome for React/dynamic content + BeautifulSoup for parsing
 - **Deployment**: Designed for platforms like Vercel, Render, or Heroku with ChromeDriver support
 - **Libraries**: requests, beautifulsoup4, selenium, fastapi, uvicorn
 
@@ -31,7 +31,7 @@ Since this is a new repository with only a README, there are no established buil
 
 - **Local Development**: `python app.py` (should include uvicorn.run() in main block)
 - **Install Dependencies**: `pip install requests beautifulsoup4 selenium fastapi uvicorn`
-- **Local Testing**: Visit `http://localhost:8000/{market}` after starting the server
+- **Local Testing**: Visit `http://localhost:8000/event/presidential-election-winner-2028?tid=1754301474937` after starting the server
 
 ## Architecture Notes
 
@@ -46,31 +46,31 @@ The application should be structured as a single FastAPI application (`app.py`) 
 
 ## Important Implementation Notes
 
-- HTML selectors need real-world validation by inspecting actual Hashdive pages
-- Include 3-5 second delays after page loads for JS content rendering
-- Respect Hashdive's terms of service and implement rate limiting
+- HTML selectors optimized for Polymarket's React-based structure
+- Include delays after page loads for React content rendering
+- Respect Polymarket's terms of service and implement rate limiting
 - Use headless Chrome with no-sandbox and disable-dev-shm-usage for deployment
-- Handle URL encoding properly for market names with spaces/special characters
-- Design for extensibility (future user analysis features)
+- Handle URL paths and query parameters properly (event paths + tid)
+- Design for Polymarket's dynamic market structure
 
 ## Output Format
 
 The application should return structured plain text like:
 ```
-## Market Analysis
+## Polymarket Analysis
 - Title: [title]
-- Human Probability: [value]
-- AI Probability: [value]
+- Yes Probability: [value]
+- No Probability: [value]
 - Trading Volume: [value]
 - Liquidity: [value]
-- Smart Score: [value]
+- Total Volume: [value]
 
-## Positions
-- Position 1: [details]
-- Position 2: [details]
+## Market Description
+- [Market description]
 
-## Trends
-- [Textual description of charts/insights]
+## Trading Outcomes
+- Outcome 1: [details]
+- Outcome 2: [details]
 ```
 
 ## Deployment Considerations

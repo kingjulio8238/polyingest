@@ -1,8 +1,8 @@
 """
-HashIngest - Web scraping application for Hashdive market analysis
-Mirrors the functionality of Gitingest but for cryptocurrency/prediction markets.
+PolyIngest - Web scraping application for Polymarket analysis
+Mirrors the functionality of GitIngest but for prediction markets.
 
-IMPORTANT: This application respects Hashdive's terms of service.
+IMPORTANT: This application respects Polymarket's terms of service.
 Implement rate limiting (max 1 request per minute) and avoid overloading their servers.
 """
 
@@ -26,8 +26,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 
 app = FastAPI(
-    title="HashIngest",
-    description="Extract and format market analysis data from Hashdive",
+    title="PolyIngest",
+    description="Extract and format market analysis data from Polymarket",
     version="1.0.0"
 )
 
@@ -112,9 +112,9 @@ def scrape_with_selenium(url: str) -> str:
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
         
-        # Wait for Streamlit to load - look for the root div to be populated
+        # Wait for React app to load - look for main content to be populated
         WebDriverWait(driver, 20).until(
-            lambda d: d.find_element(By.ID, "root").get_attribute("innerHTML").strip() != ""
+            EC.presence_of_element_located((By.TAG_NAME, "main"))
         )
         
         # Additional wait for dynamic content to fully render
@@ -130,7 +130,7 @@ def scrape_with_selenium(url: str) -> str:
         return page_source
     
     except TimeoutException:
-        raise HTTPException(status_code=408, detail="Page load timeout - Streamlit app may be taking too long to load")
+        raise HTTPException(status_code=408, detail="Page load timeout - Polymarket page may be taking too long to load")
     except WebDriverException as e:
         raise HTTPException(status_code=500, detail=f"WebDriver error: {str(e)}")
     finally:
@@ -153,128 +153,125 @@ def scrape_with_requests(url: str) -> str:
 
 def extract_market_data(html_content: str, market_name: str) -> Dict[str, str]:
     """
-    Extract market data from Streamlit-generated HTML content.
+    Extract market data from Polymarket HTML content.
     
-    Hashdive is a Streamlit app that loads content dynamically.
-    This function looks for Streamlit-specific elements and patterns.
+    Polymarket is a React-based application that loads market data dynamically.
+    This function looks for React components and market-specific elements.
     """
     soup = BeautifulSoup(html_content, 'html.parser')
     
     # Initialize data structure
     market_data = {
         'title': market_name,
-        'human_probability': 'N/A',
-        'ai_probability': 'N/A',
+        'yes_probability': 'N/A',
+        'no_probability': 'N/A', 
         'trading_volume': 'N/A',
         'liquidity': 'N/A',
-        'smart_score': 'N/A',
-        'positions': [],
-        'trends': 'N/A'
+        'total_volume': 'N/A',
+        'outcomes': [],
+        'description': 'N/A'
     }
     
     try:
-        # Check if we got actual Streamlit content or just the static fallback
-        root_div = soup.find('div', {'id': 'root'})
-        if not root_div or not root_div.get_text(strip=True):
-            # Fallback to noscript content if Streamlit didn't load
-            market_data['error'] = "Streamlit app did not load properly. Using fallback content."
-            noscript = soup.find('noscript')
-            if noscript:
-                # Extract some basic info from the noscript fallback
-                market_data['title'] = "Polymarket Analytics"
-                market_data['trading_volume'] = "Analyze the top trading markets on Polymarket, track liquidity, volume, and AI-powered probabilities."
-                market_data['liquidity'] = "Analyze the top trading markets on Polymarket, track liquidity, volume, and AI-powered probabilities."
-                market_data['smart_score'] = "Smart Score:"
-                
-                # Extract positions from noscript
-                positions = [
-                    "Market Data (Yes vs No):",
-                    "Enter a Polygon address to analyze user positions, profit/loss details, and trading scores.",
-                    "Value per Entry Price:A visualization of positions by entry price.",
-                    "Profit and Loss Distribution:Analysis of the top traders' positions."
-                ]
-                market_data['positions'] = positions
-                market_data['trends'] = "Market Trends:"
-            
-            return market_data
+        import re
         
-        # Look for Streamlit elements - they typically use data-testid attributes
-        streamlit_elements = soup.find_all(attrs={"data-testid": True})
+        # Extract title from page title or main heading
+        title_element = soup.find('title')
+        if title_element:
+            title_text = title_element.get_text(strip=True)
+            if title_text and "Polymarket" in title_text:
+                # Clean up the title
+                market_data['title'] = title_text.replace(" | Polymarket", "").strip()
         
-        # Look for metric elements (Streamlit often uses specific classes for metrics)
-        metrics = soup.find_all(class_=lambda x: x and ('metric' in ' '.join(x).lower() if isinstance(x, list) else 'metric' in x.lower()) if x else False)
-        
-        # Extract title from h1, h2, or title elements within the Streamlit app
-        for header_tag in ['h1', 'h2', 'h3']:
+        # Look for main heading elements
+        for header_tag in ['h1', 'h2']:
             headers = soup.find_all(header_tag)
             for header in headers:
                 header_text = header.get_text(strip=True)
-                if header_text and len(header_text) > 10:  # Reasonable title length
+                if header_text and len(header_text) > 5 and "Polymarket" not in header_text:
                     market_data['title'] = header_text
                     break
             if market_data['title'] != market_name:
                 break
         
-        # Look for percentage values in the actual content
+        # Get all page text for pattern matching
         all_text = soup.get_text()
+        
+        # Look for percentage values (probabilities)
         percentage_pattern = r'(\d+(?:\.\d+)?%)'
-        import re
         percentages = re.findall(percentage_pattern, all_text)
         
         if percentages:
-            # Assign first few percentages to probability fields
+            # Polymarket typically shows Yes/No probabilities
             if len(percentages) >= 1:
-                market_data['human_probability'] = percentages[0]
+                market_data['yes_probability'] = percentages[0]
             if len(percentages) >= 2:
-                market_data['ai_probability'] = percentages[1]
+                market_data['no_probability'] = percentages[1]
         
-        # Look for dollar values (volume/liquidity)
-        dollar_pattern = r'\$[\d,]+(?:\.\d{2})?[KMB]?'
-        dollar_values = re.findall(dollar_pattern, all_text)
+        # Look for volume/liquidity values
+        # Polymarket shows values like $1.2M, $45.3K, etc.
+        volume_pattern = r'\$[\d,]+(?:\.\d+)?[KMB]?'
+        volume_values = re.findall(volume_pattern, all_text)
         
-        if dollar_values:
-            market_data['trading_volume'] = dollar_values[0] if len(dollar_values) >= 1 else 'N/A'
-            market_data['liquidity'] = dollar_values[1] if len(dollar_values) >= 2 else dollar_values[0]
+        if volume_values:
+            # Try to identify volume vs liquidity based on context
+            unique_volumes = list(dict.fromkeys(volume_values))  # Remove duplicates while preserving order
+            if len(unique_volumes) >= 1:
+                market_data['trading_volume'] = unique_volumes[0]
+            if len(unique_volumes) >= 2:
+                market_data['liquidity'] = unique_volumes[1]
+            if len(unique_volumes) >= 3:
+                market_data['total_volume'] = unique_volumes[2]
         
-        # Look for score values
-        score_pattern = r'(?:score|rating):\s*(\d+(?:\.\d+)?)'
-        score_matches = re.findall(score_pattern, all_text, re.IGNORECASE)
-        if score_matches:
-            market_data['smart_score'] = score_matches[0]
+        # Look for outcome buttons/options (Yes/No, candidate names, etc.)
+        # Polymarket uses buttons for trading outcomes
+        outcome_elements = soup.find_all(['button', 'div'], 
+                                       string=lambda text: text and any(keyword in text.lower() 
+                                       for keyword in ['yes', 'no', 'buy', 'sell']) and len(text.strip()) < 50)
         
-        # Extract positions from button texts, spans, or divs
-        position_elements = soup.find_all(['button', 'span', 'div'], 
-                                        string=lambda text: text and any(keyword in text.lower() 
-                                        for keyword in ['yes', 'no', 'buy', 'sell', 'position']))
+        outcomes = []
+        for elem in outcome_elements[:10]:
+            outcome_text = elem.get_text(strip=True)
+            if outcome_text and outcome_text not in outcomes and len(outcome_text) > 1:
+                outcomes.append(outcome_text)
         
-        positions = []
-        for elem in position_elements[:10]:
-            pos_text = elem.get_text(strip=True)
-            if pos_text and len(pos_text) < 100 and pos_text not in positions:
-                positions.append(pos_text)
+        # Also look for candidate names or specific outcomes in spans/divs
+        candidate_elements = soup.find_all(['span', 'div'], 
+                                         class_=lambda x: x and any(term in ' '.join(x).lower() if isinstance(x, list) else term in x.lower() 
+                                         for term in ['outcome', 'option', 'candidate']) if x else False)
         
-        if positions:
-            market_data['positions'] = positions
+        for elem in candidate_elements[:5]:
+            candidate_text = elem.get_text(strip=True)
+            if candidate_text and len(candidate_text) < 100 and candidate_text not in outcomes:
+                outcomes.append(candidate_text)
+        
+        if outcomes:
+            market_data['outcomes'] = outcomes
         else:
-            # Fallback positions
-            market_data['positions'] = ["No specific position data found in dynamic content"]
+            market_data['outcomes'] = ["Yes", "No"]  # Default for binary markets
         
-        # Extract trends from chart-related elements or trend keywords
-        trend_elements = soup.find_all(string=lambda text: text and any(keyword in text.lower() 
-                                     for keyword in ['trend', 'up', 'down', 'bullish', 'bearish', 'movement']))
-        
-        if trend_elements:
-            trend_text = ' '.join([elem.strip() for elem in trend_elements[:3]])
-            market_data['trends'] = trend_text[:200]  # Limit length
+        # Look for market description
+        # Check for meta description or paragraph elements
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        if meta_desc and meta_desc.get('content'):
+            market_data['description'] = meta_desc.get('content')[:200]
         else:
-            market_data['trends'] = "Trend data extracted from dynamic content"
+            # Look for paragraph elements that might contain description
+            paragraphs = soup.find_all('p')
+            for p in paragraphs:
+                p_text = p.get_text(strip=True)
+                if p_text and len(p_text) > 20 and len(p_text) < 500:
+                    market_data['description'] = p_text[:200]
+                    break
         
-        # If we got here, mark that we successfully extracted from dynamic content
+        # If we still have the original market_name as title, try to clean it up
         if market_data['title'] == market_name:
-            market_data['title'] = f"Market Analysis: {market_name}"
+            # Convert URL-style path to readable title
+            readable_title = market_name.replace('-', ' ').replace('_', ' ').title()
+            market_data['title'] = f"Market: {readable_title}"
         
     except Exception as e:
-        # If extraction fails, return what we have
+        # If extraction fails, return what we have with error info
         market_data['error'] = f"Extraction error: {str(e)}"
     
     return market_data
@@ -284,32 +281,39 @@ def format_market_analysis(market_data: Dict[str, str]) -> str:
     """Format extracted data into LLM-ready plain text."""
     
     output = []
-    output.append("## Market Analysis")
+    output.append("## Polymarket Analysis")
     output.append(f"- Title: {market_data['title']}")
-    output.append(f"- Human Probability: {market_data['human_probability']}")
-    output.append(f"- AI Probability: {market_data['ai_probability']}")
+    output.append(f"- Yes Probability: {market_data['yes_probability']}")
+    output.append(f"- No Probability: {market_data['no_probability']}")
     output.append(f"- Trading Volume: {market_data['trading_volume']}")
     output.append(f"- Liquidity: {market_data['liquidity']}")
-    output.append(f"- Smart Score: {market_data['smart_score']}")
+    output.append(f"- Total Volume: {market_data['total_volume']}")
     output.append("")
     
-    output.append("## Positions")
-    if market_data['positions']:
-        for i, position in enumerate(market_data['positions'], 1):
-            output.append(f"- Position {i}: {position}")
+    output.append("## Market Description")
+    output.append(f"- {market_data['description']}")
+    output.append("")
+    
+    output.append("## Trading Outcomes")
+    if market_data['outcomes']:
+        for i, outcome in enumerate(market_data['outcomes'], 1):
+            output.append(f"- Outcome {i}: {outcome}")
     else:
-        output.append("- No position data available")
-    output.append("")
-    
-    output.append("## Trends")
-    output.append(f"- {market_data['trends']}")
+        output.append("- No outcome data available")
     output.append("")
     
     # Add data source information
     output.append("## Data Source")
-    output.append("- Source: Hashdive.com (Polymarket Analytics Platform)")
+    output.append("- Source: Polymarket.com")
     output.append("- Format: Plain text optimized for LLM consumption")
-    output.append("- Generated by: HashIngest (hashingest.com)")
+    output.append("- Generated by: PolyIngest (polyingest.com)")
+    
+    # Add note about data extraction
+    if market_data.get('yes_probability') == 'N/A' and market_data.get('no_probability') == 'N/A':
+        output.append("- Note: Probability data not found (market may not exist or be loading)")
+    else:
+        output.append("- Note: Market-specific data successfully extracted")
+    
     output.append("")
     
     if 'error' in market_data:
@@ -322,13 +326,13 @@ def format_market_analysis(market_data: Dict[str, str]) -> str:
 @app.get("/", response_class=PlainTextResponse)
 async def root():
     """Root endpoint with usage instructions."""
-    return """HashIngest - Market Analysis Extractor
+    return """PolyIngest - Polymarket Analysis Extractor
 
-Usage: Replace 'hashdive.com' with 'hashingest.com' in any Hashdive market URL
+Usage: Replace 'polymarket.com' with 'polyingest.com' in any Polymarket URL
 
 Example: 
-  Hashdive: https://hashdive.com/Analyze_Market?market=Xi+Jinping+out+in+2025%3F
-  HashIngest: https://hashingest.com/Analyze_Market?market=Xi+Jinping+out+in+2025%3F
+  Polymarket: https://polymarket.com/event/presidential-election-winner-2028?tid=1754301474937
+  PolyIngest: https://polyingest.com/event/presidential-election-winner-2028?tid=1754301474937
 
 This will fetch and format the market data as plain text for LLM consumption.
 """
@@ -340,22 +344,25 @@ async def health_check():
     return "OK"
 
 
-@app.get("/Analyze_Market", response_class=PlainTextResponse)
-async def analyze_market_with_params(market: str):
+@app.get("/event/{event_path:path}", response_class=PlainTextResponse)
+async def analyze_polymarket_event(event_path: str, tid: Optional[str] = None):
     """
-    Analyze market using query parameters (mirrors Hashdive URL structure).
+    Analyze Polymarket event (mirrors Polymarket URL structure).
     
     Args:
-        market: The market name from query parameter
+        event_path: The event path from URL
+        tid: Optional transaction ID parameter
     
     Returns:
         Plain text formatted market analysis
     """
     
-    if not market or market.strip() == "":
-        raise HTTPException(status_code=400, detail="Market parameter cannot be empty")
+    if not event_path or event_path.strip() == "":
+        raise HTTPException(status_code=400, detail="Event path cannot be empty")
     
-    market_key = market.lower().strip()
+    # Create cache key from event path and tid
+    cache_key = f"{event_path}_{tid}" if tid else event_path
+    market_key = cache_key.lower().strip()
     
     # Check rate limiting
     if is_rate_limited(market_key):
@@ -369,23 +376,25 @@ async def analyze_market_with_params(market: str):
     if cached_response:
         return cached_response
     
-    # Construct the original Hashdive URL
-    hashdive_url = f"https://hashdive.com/Analyze_Market?market={market}"
+    # Construct the original Polymarket URL
+    polymarket_url = f"https://polymarket.com/event/{event_path}"
+    if tid:
+        polymarket_url += f"?tid={tid}"
     
     try:
         # Try Selenium first for dynamic content
         try:
-            html_content = scrape_with_selenium(hashdive_url)
+            html_content = scrape_with_selenium(polymarket_url)
         except Exception as selenium_error:
             # Fallback to requests
             try:
-                html_content = scrape_with_requests(hashdive_url)
+                html_content = scrape_with_requests(polymarket_url)
             except Exception as requests_error:
                 error_msg = f"Failed to fetch market data. Selenium error: {selenium_error}. Requests error: {requests_error}"
                 raise HTTPException(status_code=500, detail=error_msg)
         
         # Extract market data
-        market_data = extract_market_data(html_content, market)
+        market_data = extract_market_data(html_content, event_path)
         
         # Format response
         formatted_response = format_market_analysis(market_data)
@@ -402,60 +411,29 @@ async def analyze_market_with_params(market: str):
 
 
 @app.get("/{market_path:path}", response_class=PlainTextResponse)
-async def analyze_market_with_path(market_path: str):
+async def analyze_fallback_path(market_path: str):
     """
-    Fallback endpoint for backward compatibility.
-    Handles simple market names (e.g., "US recession in 2025")
+    Fallback endpoint - attempts to find market on Polymarket.
+    Handles cases where users provide simple market descriptions.
     """
     
     if not market_path or market_path.strip() == "":
         raise HTTPException(status_code=400, detail="Market path cannot be empty")
     
-    market_key = market_path.lower().strip()
-    
-    # Check rate limiting
-    if is_rate_limited(market_key):
-        raise HTTPException(
-            status_code=429, 
-            detail="Rate limited. Please wait before making another request for this market."
-        )
-    
-    # Check cache
-    cached_response = get_cached_response(market_key)
-    if cached_response:
-        return cached_response
-    
-    # URL encode the market name for Hashdive using proper format
-    encoded_market = urllib.parse.quote_plus(market_path)
-    hashdive_url = f"https://hashdive.com/Analyze_Market?market={encoded_market}"
-    
-    try:
-        # Try Selenium first for dynamic content
-        try:
-            html_content = scrape_with_selenium(hashdive_url)
-        except Exception as selenium_error:
-            # Fallback to requests
-            try:
-                html_content = scrape_with_requests(hashdive_url)
-            except Exception as requests_error:
-                error_msg = f"Failed to fetch market data. Selenium error: {selenium_error}. Requests error: {requests_error}"
-                raise HTTPException(status_code=500, detail=error_msg)
-        
-        # Extract market data
-        market_data = extract_market_data(html_content, market_path)
-        
-        # Format response
-        formatted_response = format_market_analysis(market_data)
-        
-        # Cache the response
-        cache_response(market_key, formatted_response)
-        
-        return formatted_response
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    # Return helpful message for unsupported paths
+    return f"""PolyIngest - Path not supported
+
+The path '/{market_path}' is not supported.
+
+To use PolyIngest:
+1. Go to polymarket.com and find a market
+2. Copy the full URL (e.g., https://polymarket.com/event/presidential-election-winner-2028?tid=1754301474937)  
+3. Replace 'polymarket.com' with 'polyingest.com' in the URL
+
+Example:
+  Original: https://polymarket.com/event/presidential-election-winner-2028?tid=1754301474937
+  PolyIngest: https://polyingest.com/event/presidential-election-winner-2028?tid=1754301474937
+"""
 
 
 if __name__ == "__main__":
