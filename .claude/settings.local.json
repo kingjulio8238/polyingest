@@ -5,7 +5,8 @@
       "Bash(pkill:*)",
       "WebFetch(domain:hashdive.com)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:gitingest.com)"
     ],
     "deny": []
   }
