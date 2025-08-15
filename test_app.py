@@ -1,214 +1,117 @@
 #!/usr/bin/env python3
 """
-Simple test script for HashIngest application
-Run this to verify basic functionality works as expected
+Test script to validate FastAPI application setup with minimal configuration.
 """
-
-import requests
-import time
+import os
 import sys
-from urllib.parse import quote
+import asyncio
+from pathlib import Path
 
-# Configuration
-BASE_URL = "http://localhost:8000"
-TEST_MARKETS = [
-    "US recession in 2025",
-    "bitcoin price prediction",
-    "AI will replace programmers",
-    "climate change effects"
-]
+# Set required environment variables for testing
+os.environ["POLYGON_RPC_URL"] = "https://polygon-rpc.com"
+os.environ["DATABASE_URL"] = "postgresql://test:test@localhost/test"
 
-def test_endpoint(url, expected_content=None, should_contain=None):
-    """Test a single endpoint"""
+# Add the project root to the Python path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+async def test_polymarket_client():
+    """Test the Polymarket client initialization."""
+    from app.data.polymarket_client import PolymarketClient
+    
+    print("Testing Polymarket client initialization...")
     try:
-        print(f"Testing: {url}")
-        response = requests.get(url, timeout=30)
-        
-        print(f"  Status Code: {response.status_code}")
-        print(f"  Content Type: {response.headers.get('content-type', 'N/A')}")
-        print(f"  Response Length: {len(response.text)} characters")
-        
-        if response.status_code != 200:
-            print(f"  ❌ FAILED: Expected 200, got {response.status_code}")
-            return False
-        
-        if expected_content and response.text.strip() != expected_content:
-            print(f"  ❌ FAILED: Expected '{expected_content}', got '{response.text[:100]}...'")
-            return False
-            
-        if should_contain:
-            for content in should_contain:
-                if content not in response.text:
-                    print(f"  ❌ FAILED: Response missing '{content}'")
-                    return False
-        
-        print(f"  ✅ PASSED")
-        return True
-        
-    except requests.exceptions.RequestException as e:
-        print(f"  ❌ FAILED: Request error - {e}")
-        return False
+        async with PolymarketClient() as client:
+            print("✓ Polymarket client initialized successfully")
+            print(f"  GraphQL URL: {client.graphql_url}")
+            print(f"  REST URL: {client.rest_url}")
     except Exception as e:
-        print(f"  ❌ FAILED: Unexpected error - {e}")
+        print(f"✗ Error initializing Polymarket client: {e}")
         return False
+    return True
 
-def test_basic_endpoints():
-    """Test basic application endpoints"""
-    print("=" * 60)
-    print("TESTING BASIC ENDPOINTS")
-    print("=" * 60)
-    
-    results = []
-    
-    # Test health endpoint
-    results.append(test_endpoint(
-        f"{BASE_URL}/health",
-        expected_content="OK"
-    ))
-    
-    # Test root endpoint
-    results.append(test_endpoint(
-        f"{BASE_URL}/",
-        should_contain=["HashIngest", "Market Analysis", "Usage:", "Example:"]
-    ))
-    
-    return results
-
-def test_market_endpoints():
-    """Test market analysis endpoints"""
-    print("\n" + "=" * 60)
-    print("TESTING MARKET ENDPOINTS")
-    print("=" * 60)
-    
-    results = []
-    
-    for market in TEST_MARKETS:
-        encoded_market = quote(market)
-        url = f"{BASE_URL}/{encoded_market}"
-        
-        # Expected content in market analysis
-        expected_sections = [
-            "## Market Analysis",
-            "- Title:",
-            "- Human Probability:",
-            "- AI Probability:",
-            "- Trading Volume:",
-            "- Liquidity:",
-            "- Smart Score:",
-            "## Positions",
-            "## Trends"
-        ]
-        
-        result = test_endpoint(url, should_contain=expected_sections)
-        results.append(result)
-        
-        if result:
-            print(f"  📊 Market data extracted successfully for: {market}")
-        
-        # Small delay to respect rate limiting
-        time.sleep(2)
-    
-    return results
-
-def test_rate_limiting():
-    """Test rate limiting functionality"""
-    print("\n" + "=" * 60)
-    print("TESTING RATE LIMITING")
-    print("=" * 60)
-    
-    market = "rate limit test"
-    url = f"{BASE_URL}/{quote(market)}"
-    
-    print("Making first request...")
-    response1 = requests.get(url)
-    print(f"  First request: {response1.status_code}")
-    
-    print("Making immediate second request (should be cached)...")
-    response2 = requests.get(url)
-    print(f"  Second request: {response2.status_code}")
-    
-    # Check if responses are identical (cached)
-    if response1.text == response2.text:
-        print("  ✅ PASSED: Caching working (identical responses)")
-        return True
-    else:
-        print("  ⚠️  WARNING: Responses differ (caching may not be working)")
-        return False
-
-def test_error_handling():
-    """Test error handling"""
-    print("\n" + "=" * 60)
-    print("TESTING ERROR HANDLING")
-    print("=" * 60)
-    
-    results = []
-    
-    # Test empty market path
+def test_fastapi_import():
+    """Test FastAPI application import."""
+    print("Testing FastAPI application import...")
     try:
-        print("Testing empty market path...")
-        response = requests.get(f"{BASE_URL}/")
-        if response.status_code == 200 and "Usage:" in response.text:
-            print("  ✅ PASSED: Root endpoint handles empty path correctly")
-            results.append(True)
+        from app.main import app
+        print("✓ FastAPI application imported successfully")
+        print(f"  App title: {app.title}")
+        print(f"  App version: {app.version}")
+        return True
+    except Exception as e:
+        print(f"✗ Error importing FastAPI app: {e}")
+        return False
+
+def test_models():
+    """Test data models."""
+    print("Testing data models...")
+    try:
+        from app.data.models import MarketData, MarketOutcome
+        from decimal import Decimal
+        from datetime import datetime
+        
+        # Test MarketOutcome
+        outcome = MarketOutcome(
+            id="test_outcome",
+            name="Yes",
+            current_price=Decimal("0.52"),
+            volume_24h=Decimal("1000000"),
+            liquidity=Decimal("500000")
+        )
+        
+        # Test MarketData
+        market = MarketData(
+            id="test_market",
+            title="Test Market",
+            description="Test Description",
+            category="Test",
+            end_date=datetime.now(),
+            resolution_criteria="Test criteria",
+            status="active",
+            creator="0x123...",
+            total_volume=Decimal("2000000"),
+            total_liquidity=Decimal("1000000"),
+            outcomes=[outcome]
+        )
+        
+        print("✓ Data models work correctly")
+        return True
+    except Exception as e:
+        print(f"✗ Error with data models: {e}")
+        return False
+
+async def main():
+    """Run all tests."""
+    print("=== PolyIngest Backend Test Suite ===\n")
+    
+    tests = [
+        test_fastapi_import,
+        test_models,
+        test_polymarket_client
+    ]
+    
+    passed = 0
+    total = len(tests)
+    
+    for test in tests:
+        if asyncio.iscoroutinefunction(test):
+            result = await test()
         else:
-            print("  ❌ FAILED: Unexpected response for empty path")
-            results.append(False)
-    except Exception as e:
-        print(f"  ❌ FAILED: Error testing empty path - {e}")
-        results.append(False)
+            result = test()
+        if result:
+            passed += 1
+        print()
     
-    return results
-
-def check_server_running():
-    """Check if the server is running"""
-    try:
-        response = requests.get(f"{BASE_URL}/health", timeout=5)
-        return response.status_code == 200
-    except:
-        return False
-
-def main():
-    """Run all tests"""
-    print("🚀 HashIngest Application Test Suite")
-    print("=" * 60)
+    print(f"=== Test Results: {passed}/{total} passed ===")
     
-    # Check if server is running
-    if not check_server_running():
-        print("❌ ERROR: Server not running!")
-        print("\nTo start the server, run:")
-        print("  python app.py")
-        print("\nThen run this test script again.")
-        sys.exit(1)
-    
-    print("✅ Server is running")
-    
-    # Run all tests
-    all_results = []
-    
-    all_results.extend(test_basic_endpoints())
-    all_results.extend(test_market_endpoints())
-    all_results.extend([test_rate_limiting()])
-    all_results.extend(test_error_handling())
-    
-    # Summary
-    print("\n" + "=" * 60)
-    print("TEST SUMMARY")
-    print("=" * 60)
-    
-    passed = sum(all_results)
-    total = len(all_results)
-    failed = total - passed
-    
-    print(f"Total Tests: {total}")
-    print(f"✅ Passed: {passed}")
-    print(f"❌ Failed: {failed}")
-    
-    if failed == 0:
-        print("\n🎉 ALL TESTS PASSED! The application is working correctly.")
-        sys.exit(0)
+    if passed == total:
+        print("🎉 All tests passed! Backend setup is complete.")
+        return True
     else:
-        print(f"\n⚠️  {failed} tests failed. Check the output above for details.")
-        sys.exit(1)
+        print("❌ Some tests failed. Check the errors above.")
+        return False
 
 if __name__ == "__main__":
-    main()
+    success = asyncio.run(main())
+    sys.exit(0 if success else 1)

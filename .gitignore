@@ -1,7 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyd
 
 # C extensions
 *.so
@@ -47,7 +47,6 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
-cover/
 
 # Environments
 .env
@@ -58,25 +57,22 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Logs and databases
+*.log
+*.sql
+*.sqlite
 
-# OS
+# OS generated files
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# Logs
-*.log
-logs/
-
-# Chrome driver downloads
-chromedriver*
+# Project-specific ignores
+results/
+downloads/
+migrations/
+*.key
+*.pem
+secrets/
+local_data/
+tmp/
+temp/

@@ -6,7 +6,9 @@
       "WebFetch(domain:hashdive.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:gitingest.com)"
+      "WebFetch(domain:gitingest.com)",
+      "Bash(mkdir:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }
