@@ -99,6 +99,108 @@ class ConfidenceIndicators(BaseModel):
     proven_track_record: bool
     early_entry: bool
 
+# Enhanced models for trader intelligence module
+
+class ConvictionSignal(BaseModel):
+    type: str  # "high_allocation", "significant_position", "early_entry", "sustained_position"
+    market_id: str
+    allocation_percentage: Optional[float] = None
+    position_size_usd: Optional[float] = None
+    entry_timestamp: Optional[int] = None
+    hold_duration_days: Optional[float] = None
+    confidence: str  # "low", "medium", "high"
+    reasoning: str
+
+class PortfolioMetricsModel(BaseModel):
+    total_value_usd: Decimal = Field(..., ge=0)
+    position_count: int = Field(..., ge=0)
+    max_single_allocation: Decimal = Field(..., ge=0, le=1)
+    avg_allocation_per_position: Decimal = Field(..., ge=0, le=1)
+    diversification_score: Decimal = Field(..., ge=0, le=1)
+    concentration_risk: str  # "minimal", "low", "moderate", "high"
+    sector_allocation: Dict[str, Decimal] = Field(default_factory=dict)
+    market_allocation: Dict[str, Decimal] = Field(default_factory=dict)
+
+class TradingPatternAnalysisModel(BaseModel):
+    entry_timing_preference: str  # "early", "mixed", "late", "unknown"
+    hold_duration_avg_days: float = Field(..., ge=0)
+    position_sizing_style: str  # "consistent", "moderate", "variable", "unknown"
+    market_selection_pattern: str  # "specialist", "focused", "generalist"
+    risk_adjustment_behavior: str  # "static", "dynamic", "unknown"
+    conviction_signals: List[str] = Field(default_factory=list)
+
+class RiskAssessmentModel(BaseModel):
+    overall_risk_score: Decimal = Field(..., ge=0, le=1)
+    portfolio_concentration_risk: Decimal = Field(..., ge=0, le=1)
+    position_sizing_risk: Decimal = Field(..., ge=0, le=1)
+    market_timing_risk: Decimal = Field(..., ge=0, le=1)
+    liquidity_risk: Decimal = Field(..., ge=0, le=1)
+    correlation_risk: Decimal = Field(..., ge=0, le=1)
+    risk_level: str  # "low", "moderate", "high", "extreme", "unknown"
+
+class TraderProfileModel(BaseModel):
+    address: str
+    total_portfolio_value_usd: Decimal = Field(..., ge=0)
+    active_positions: int = Field(..., ge=0)
+    portfolio_diversity: Decimal = Field(..., ge=0, le=1)
+    risk_tolerance: str  # "low", "moderate", "high", "extreme"
+    conviction_level: str  # "minimal", "low", "medium", "high"
+    success_rate: Decimal = Field(..., ge=0, le=1)
+    avg_position_size: Decimal = Field(..., ge=0)
+    position_sizing_consistency: Decimal = Field(..., ge=0, le=1)
+    market_timing_score: Decimal = Field(..., ge=0, le=1)
+    sector_preferences: List[str] = Field(default_factory=list)
+    confidence_score: Decimal = Field(..., ge=0, le=1)
+
+class TraderIntelligenceAnalysis(BaseModel):
+    address: str
+    analysis_timestamp: str
+    trader_profile: Optional[TraderProfileModel] = None
+    portfolio_metrics: Optional[PortfolioMetricsModel] = None
+    trading_patterns: Optional[TradingPatternAnalysisModel] = None
+    risk_assessment: Optional[RiskAssessmentModel] = None
+    conviction_signals: List[ConvictionSignal] = Field(default_factory=list)
+    intelligence_score: Decimal = Field(..., ge=0, le=1)
+    key_insights: List[str] = Field(default_factory=list)
+    confidence_level: Decimal = Field(..., ge=0, le=1)
+    error: Optional[str] = None
+
+# Enhanced performance metrics with statistical analysis
+class StatisticalMetrics(BaseModel):
+    success_rate: Decimal = Field(..., ge=0, le=1)
+    total_trades: int = Field(..., ge=0)
+    winning_trades: int = Field(..., ge=0)
+    confidence_interval: List[float] = Field(default_factory=list)
+    is_statistically_significant: bool = False
+    sample_size_adequate: bool = False
+
+class ROIMetrics(BaseModel):
+    roi_percentage: Decimal
+    total_invested: Decimal = Field(..., ge=0)
+    current_value: Decimal = Field(..., ge=0)
+    unrealized_pnl: Decimal
+    realized_pnl: Decimal
+    total_pnl: Decimal
+
+class BehavioralPatterns(BaseModel):
+    avg_position_size: Decimal = Field(..., ge=0)
+    position_size_consistency: Decimal = Field(..., ge=0, le=1)
+    avg_hold_duration_days: float = Field(..., ge=0)
+    preferred_market_types: List[str] = Field(default_factory=list)
+    risk_tolerance: str
+
+# Enhanced trader performance model
+class EnhancedTraderPerformance(BaseModel):
+    address: str
+    total_portfolio_value_usd: Decimal = Field(..., ge=0)
+    active_positions: int = Field(..., ge=0)
+    total_markets_traded: int = Field(..., ge=0)
+    statistical_metrics: StatisticalMetrics
+    roi_metrics: ROIMetrics
+    behavioral_patterns: BehavioralPatterns
+    intelligence_analysis: Optional[TraderIntelligenceAnalysis] = None
+    positions: List[TraderPosition] = Field(default_factory=list)
+
 class KeyTrader(BaseModel):
     address: str
     position_size_usd: Decimal = Field(..., ge=0)
