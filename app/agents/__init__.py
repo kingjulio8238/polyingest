@@ -9,11 +9,13 @@ from .base_agent import BaseAgent
 from .portfolio_agent import PortfolioAnalyzerAgent
 from .success_rate_agent import SuccessRateAgent
 from .voting_system import VotingSystem, VotingResult
+from .coordinator import AgentCoordinator
 
 __all__ = [
     "BaseAgent",
     "PortfolioAnalyzerAgent", 
     "SuccessRateAgent",
     "VotingSystem",
-    "VotingResult"
+    "VotingResult",
+    "AgentCoordinator"
 ]
