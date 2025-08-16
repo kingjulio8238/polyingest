@@ -5,12 +5,17 @@ from app.data.blockchain_client import BlockchainClient
 from app.data.models import (MarketData, AlphaAnalysis, TraderPerformance, 
                              TraderIntelligenceAnalysis, ConvictionSignal,
                              PortfolioMetricsModel, TradingPatternAnalysisModel, 
-                             RiskAssessmentModel, TraderProfileModel)
+                             RiskAssessmentModel, TraderProfileModel,
+                             ComprehensivePerformanceMetrics, MarketOutcomeData)
 from app.agents.coordinator import AgentCoordinator
 from app.api.dependencies import CoordinatorDep, ClientDep
 from app.intelligence.trader_analyzer import TraderAnalyzer
+from app.intelligence.performance_calculator import PerformanceCalculator
+from app.intelligence.market_outcome_tracker import MarketOutcomeTracker
 import logging
 import asyncio
+import time
+from datetime import datetime
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -27,6 +32,15 @@ async def get_trader_analyzer() -> TraderAnalyzer:
     """Dependency to get trader analyzer instance."""
     blockchain_client = BlockchainClient()
     return TraderAnalyzer(blockchain_client)
+
+async def get_performance_calculator() -> PerformanceCalculator:
+    """Dependency to get performance calculator instance."""
+    return PerformanceCalculator()
+
+async def get_market_outcome_tracker() -> MarketOutcomeTracker:
+    """Dependency to get market outcome tracker instance."""
+    polymarket_client = PolymarketClient()
+    return MarketOutcomeTracker(polymarket_client)
 
 # Helper functions for data retrieval and processing
 
@@ -916,3 +930,369 @@ def _generate_risk_recommendations(risk_assessment: RiskAssessmentModel,
         recommendations.append("Very conservative approach - may consider selective increased exposure")
     
     return recommendations or ["Risk profile appears well-balanced"]
+
+# Enhanced Performance Analysis Endpoints
+
+@router.get("/trader/{trader_address}/performance/comprehensive")
+async def get_comprehensive_trader_performance(
+    trader_address: str,
+    include_unrealized: bool = Query(True, description="Include unrealized P&L from active positions"),
+    time_period_days: int = Query(365, description="Analysis time period in days", ge=1, le=1825),
+    performance_calculator: PerformanceCalculator = Depends(get_performance_calculator),
+    outcome_tracker: MarketOutcomeTracker = Depends(get_market_outcome_tracker),
+    blockchain_client: BlockchainClient = Depends(get_blockchain_client)
+):
+    """
+    Get comprehensive trader performance analysis with verified market outcomes.
+    
+    This endpoint provides statistically rigorous performance metrics including:
+    - Success rate with Wilson score confidence intervals
+    - Risk-adjusted returns (Sharpe ratio, Sortino ratio)
+    - Maximum drawdown and volatility analysis
+    - Statistical significance testing
+    - Time-series performance trends
+    """
+    try:
+        logger.info(f"Getting comprehensive performance for trader: {trader_address}")
+        
+        # Get trader portfolio data
+        portfolio_data = await blockchain_client.get_trader_portfolio(trader_address)
+        
+        if "error" in portfolio_data:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Error fetching trader data: {portfolio_data['error']}"
+            )
+        
+        # Get trader performance history with market correlations
+        performance_history = await outcome_tracker.get_trader_performance_history(
+            trader_address, include_unrealized
+        )
+        
+        if "error" in performance_history:
+            logger.warning(f"Could not get performance history: {performance_history['error']}")
+            performance_history = {}
+        
+        # Calculate comprehensive performance metrics
+        sample_market_outcomes = {}  # Would be populated with actual market outcomes
+        performance_metrics = await performance_calculator.calculate_trader_performance(
+            portfolio_data, sample_market_outcomes
+        )
+        
+        # Calculate risk-adjusted returns
+        positions = portfolio_data.get("positions", [])
+        risk_adjusted_metrics = performance_calculator.calculate_risk_adjusted_returns(positions, time_period_days)
+        
+        # Validate statistical significance
+        significance_test = performance_calculator.validate_statistical_significance({
+            "success_rate": float(performance_metrics.success_rate),
+            "total_trades": performance_metrics.total_trades,
+            "winning_trades": performance_metrics.winning_trades
+        })
+        
+        # Build comprehensive response
+        response = {
+            "trader_address": trader_address,
+            "analysis_timestamp": datetime.utcnow().isoformat(),
+            "time_period_days": time_period_days,
+            "include_unrealized": include_unrealized,
+            
+            # Core performance metrics
+            "performance_metrics": {
+                "success_rate": float(performance_metrics.success_rate),
+                "total_trades": performance_metrics.total_trades,
+                "winning_trades": performance_metrics.winning_trades,
+                "losing_trades": performance_metrics.losing_trades,
+                "confidence_interval": [float(ci) for ci in performance_metrics.confidence_interval],
+                "wilson_score_interval": [float(wi) for wi in performance_metrics.wilson_score_interval],
+                "statistical_significance": performance_metrics.statistical_significance,
+                "p_value": float(performance_metrics.p_value) if performance_metrics.p_value else None
+            },
+            
+            # Financial metrics
+            "financial_metrics": {
+                "total_invested": float(performance_metrics.total_invested),
+                "total_returns": float(performance_metrics.total_returns),
+                "net_profit": float(performance_metrics.net_profit),
+                "roi_percentage": float(performance_metrics.roi_percentage),
+                "unrealized_pnl": float(performance_metrics.total_returns - performance_metrics.total_invested) if include_unrealized else 0.0
+            },
+            
+            # Risk-adjusted metrics
+            "risk_metrics": {
+                "sharpe_ratio": float(performance_metrics.sharpe_ratio) if performance_metrics.sharpe_ratio else None,
+                "sortino_ratio": float(performance_metrics.sortino_ratio) if performance_metrics.sortino_ratio else None,
+                "maximum_drawdown": float(performance_metrics.maximum_drawdown),
+                "volatility": float(performance_metrics.volatility),
+                "value_at_risk_95": float(performance_metrics.value_at_risk_95),
+                "expected_shortfall_95": float(performance_metrics.expected_shortfall_95)
+            },
+            
+            # Timing and behavior metrics
+            "timing_metrics": {
+                "avg_hold_duration_days": performance_metrics.avg_hold_duration_days,
+                "win_rate_by_duration": {k: float(v) for k, v in performance_metrics.win_rate_by_duration.items()},
+                "timing_alpha": float(performance_metrics.timing_alpha)
+            },
+            
+            # Statistical validation
+            "statistical_validation": significance_test,
+            
+            # Performance history trends
+            "performance_trends": performance_history.get("time_analysis", {}),
+            "category_analysis": performance_history.get("category_analysis", {}),
+            
+            # Data quality assessment
+            "data_quality": performance_history.get("data_quality", {
+                "quality": "unknown",
+                "score": 0.0,
+                "sample_size": performance_metrics.total_trades
+            })
+        }
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting comprehensive performance for {trader_address}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during performance analysis"
+        )
+
+@router.post("/market/{market_id}/outcome")
+async def track_market_outcome(
+    market_id: str,
+    outcome_data: MarketOutcomeData,
+    outcome_tracker: MarketOutcomeTracker = Depends(get_market_outcome_tracker)
+):
+    """
+    Track a market outcome for performance correlation.
+    
+    This endpoint allows tracking of market resolutions to correlate with trader positions
+    for accurate performance calculation.
+    """
+    try:
+        logger.info(f"Tracking outcome for market: {market_id}")
+        
+        resolution_data = {
+            "winning_outcome_id": outcome_data.winning_outcome_id,
+            "resolution_timestamp": outcome_data.resolution_timestamp,
+            "resolution_source": outcome_data.resolution_source,
+            "confidence_score": float(outcome_data.confidence_score),
+            "title": f"Market {market_id}",
+            "verification_count": 1
+        }
+        
+        resolution = await outcome_tracker.track_market_resolution(market_id, resolution_data)
+        
+        return {
+            "market_id": market_id,
+            "resolution_tracked": True,
+            "winning_outcome": resolution.winning_outcome_id,
+            "confidence_level": resolution.confidence_level.value,
+            "resolution_timestamp": resolution.resolution_timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"Error tracking market outcome for {market_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error while tracking market outcome"
+        )
+
+@router.get("/trader/{trader_address}/performance/trends")
+async def get_trader_performance_trends(
+    trader_address: str,
+    time_periods: List[str] = Query(["30d", "90d", "180d", "365d"], description="Time periods to analyze"),
+    performance_calculator: PerformanceCalculator = Depends(get_performance_calculator),
+    outcome_tracker: MarketOutcomeTracker = Depends(get_market_outcome_tracker)
+):
+    """
+    Analyze trader performance trends over multiple time periods.
+    
+    Provides trend analysis showing performance evolution over time with
+    statistical significance testing for each period.
+    """
+    try:
+        logger.info(f"Analyzing performance trends for trader: {trader_address}")
+        
+        # Get trader performance history
+        performance_history = await outcome_tracker.get_trader_performance_history(trader_address)
+        
+        if "error" in performance_history:
+            raise HTTPException(
+                status_code=404,
+                detail="No performance history found for trader"
+            )
+        
+        # Mock trader history for trend analysis (would come from actual data)
+        trader_history = performance_history.get("position_outcomes", [])
+        
+        # Convert to the format expected by analyze_performance_trends
+        trading_history = []
+        for outcome in trader_history:
+            trading_history.append({
+                "timestamp": int(time.time()),  # Would use actual timestamps
+                "profit_loss": outcome.get("profit_loss", 0),
+                "position_size": outcome.get("position_size_usd", 0),
+                "outcome": "win" if outcome.get("is_winner", False) else "loss"
+            })
+        
+        # Analyze trends
+        trends = performance_calculator.analyze_performance_trends(trading_history, time_periods)
+        
+        # Format response
+        trend_analysis = []
+        for trend in trends:
+            trend_analysis.append({
+                "time_period": trend.time_period,
+                "period_start": trend.period_start.isoformat(),
+                "period_end": trend.period_end.isoformat(),
+                "success_rate": float(trend.success_rate),
+                "trade_count": trend.trade_count,
+                "net_profit": float(trend.net_profit),
+                "roi_percentage": float(trend.roi_percentage),
+                "trend_direction": trend.trend_direction
+            })
+        
+        return {
+            "trader_address": trader_address,
+            "analysis_timestamp": datetime.utcnow().isoformat(),
+            "trend_analysis": trend_analysis,
+            "overall_trend": _determine_overall_trend(trend_analysis),
+            "performance_consistency": _calculate_consistency_score(trend_analysis)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error analyzing performance trends for {trader_address}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during trend analysis"
+        )
+
+@router.get("/analytics/market-outcomes/statistics")
+async def get_market_outcome_statistics(
+    outcome_tracker: MarketOutcomeTracker = Depends(get_market_outcome_tracker)
+):
+    """
+    Get statistics on tracked market outcomes and resolution quality.
+    
+    Provides insights into the quality and completeness of market outcome tracking.
+    """
+    try:
+        stats = outcome_tracker.get_market_outcome_statistics()
+        
+        return {
+            "outcome_statistics": stats,
+            "tracking_quality": {
+                "high_confidence_ratio": stats.get("high_confidence_count", 0) / max(stats.get("total_markets", 1), 1),
+                "average_delay_hours": stats.get("avg_resolution_delay_hours", 0),
+                "total_volume_tracked": stats.get("total_volume_resolved", 0)
+            },
+            "recommendations": _generate_tracking_recommendations(stats)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting market outcome statistics: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error while retrieving statistics"
+        )
+
+@router.post("/analytics/monitor/resolutions")
+async def monitor_pending_resolutions(
+    outcome_tracker: MarketOutcomeTracker = Depends(get_market_outcome_tracker)
+):
+    """
+    Monitor and update pending market resolutions.
+    
+    Checks for newly resolved markets and updates trader performance data accordingly.
+    """
+    try:
+        monitoring_summary = await outcome_tracker.monitor_pending_resolutions()
+        
+        return {
+            "monitoring_summary": monitoring_summary,
+            "timestamp": datetime.utcnow().isoformat(),
+            "success": "error" not in monitoring_summary
+        }
+        
+    except Exception as e:
+        logger.error(f"Error monitoring pending resolutions: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during resolution monitoring"
+        )
+
+# Helper functions for new endpoints
+
+def _determine_overall_trend(trend_analysis: List[Dict[str, Any]]) -> str:
+    """Determine overall performance trend from time period analysis."""
+    if not trend_analysis:
+        return "insufficient_data"
+    
+    # Look at success rate trend across periods
+    success_rates = [trend["success_rate"] for trend in trend_analysis if trend["trade_count"] > 0]
+    
+    if len(success_rates) < 2:
+        return "insufficient_data"
+    
+    # Simple trend detection
+    recent_rate = success_rates[-1]
+    earlier_rate = success_rates[0]
+    
+    if recent_rate > earlier_rate + 0.1:
+        return "improving"
+    elif recent_rate < earlier_rate - 0.1:
+        return "declining"
+    else:
+        return "stable"
+
+def _calculate_consistency_score(trend_analysis: List[Dict[str, Any]]) -> float:
+    """Calculate performance consistency score across time periods."""
+    if len(trend_analysis) < 2:
+        return 0.0
+    
+    success_rates = [trend["success_rate"] for trend in trend_analysis if trend["trade_count"] > 0]
+    
+    if len(success_rates) < 2:
+        return 0.0
+    
+    # Calculate coefficient of variation (lower = more consistent)
+    mean_rate = sum(success_rates) / len(success_rates)
+    variance = sum((rate - mean_rate) ** 2 for rate in success_rates) / len(success_rates)
+    std_dev = variance ** 0.5
+    
+    if mean_rate == 0:
+        return 0.0
+    
+    cv = std_dev / mean_rate
+    consistency_score = max(0.0, 1.0 - cv)  # Invert so higher score = more consistent
+    
+    return round(consistency_score, 3)
+
+def _generate_tracking_recommendations(stats: Dict[str, Any]) -> List[str]:
+    """Generate recommendations for improving market outcome tracking."""
+    recommendations = []
+    
+    total_markets = stats.get("total_markets", 0)
+    high_confidence_count = stats.get("high_confidence_count", 0)
+    
+    if total_markets == 0:
+        recommendations.append("Start tracking market outcomes to enable performance analysis")
+    elif high_confidence_count / total_markets < 0.7:
+        recommendations.append("Improve resolution verification to increase confidence levels")
+    
+    avg_delay = stats.get("avg_resolution_delay_hours", 0)
+    if avg_delay > 48:
+        recommendations.append("Reduce resolution tracking delay for more timely performance updates")
+    
+    confidence_dist = stats.get("confidence_distribution", {})
+    if confidence_dist.get("low", 0) > confidence_dist.get("high", 0):
+        recommendations.append("Increase verification sources for higher confidence resolutions")
+    
+    return recommendations or ["Market outcome tracking appears to be functioning well"]

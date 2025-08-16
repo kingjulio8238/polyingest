@@ -174,6 +174,101 @@ class StatisticalMetrics(BaseModel):
     is_statistically_significant: bool = False
     sample_size_adequate: bool = False
 
+# Performance calculator models
+class MarketOutcomeData(BaseModel):
+    """Market resolution data for performance tracking."""
+    market_id: str
+    resolution: str  # "win", "loss", "draw", "void", "pending"
+    winning_outcome_id: str
+    resolution_timestamp: int
+    resolution_source: str
+    confidence_score: Decimal = Field(..., ge=0, le=1)
+
+class PositionData(BaseModel):
+    """Enhanced position data for performance calculation."""
+    market_id: str
+    outcome_id: str
+    position_size_usd: Decimal = Field(..., ge=0)
+    entry_price: Decimal = Field(..., ge=0, le=1)
+    entry_timestamp: int
+    exit_price: Optional[Decimal] = None
+    exit_timestamp: Optional[int] = None
+    current_price: Optional[Decimal] = None
+    status: str = "active"  # active, closed, expired
+
+class ComprehensivePerformanceMetrics(BaseModel):
+    """Comprehensive performance metrics with statistical analysis."""
+    # Success rate metrics
+    success_rate: Decimal = Field(..., ge=0, le=1)
+    total_trades: int = Field(..., ge=0)
+    winning_trades: int = Field(..., ge=0)
+    losing_trades: int = Field(..., ge=0)
+    confidence_interval: List[Decimal] = Field(default_factory=list)
+    wilson_score_interval: List[Decimal] = Field(default_factory=list)
+    statistical_significance: bool = False
+    p_value: Optional[Decimal] = None
+    
+    # Financial metrics
+    total_invested: Decimal = Field(..., ge=0)
+    total_returns: Decimal = Field(..., ge=0)
+    net_profit: Decimal
+    roi_percentage: Decimal
+    sharpe_ratio: Optional[Decimal] = None
+    sortino_ratio: Optional[Decimal] = None
+    maximum_drawdown: Decimal = Field(..., ge=0, le=1)
+    
+    # Risk metrics
+    volatility: Decimal = Field(..., ge=0)
+    value_at_risk_95: Decimal = Field(..., ge=0)
+    expected_shortfall_95: Decimal = Field(..., ge=0)
+    
+    # Timing metrics
+    avg_hold_duration_days: float = Field(..., ge=0)
+    win_rate_by_duration: Dict[str, Decimal] = Field(default_factory=dict)
+    timing_alpha: Decimal = Field(..., ge=0, le=1)
+
+class PerformanceTrendData(BaseModel):
+    """Performance trend analysis over time periods."""
+    time_period: str
+    period_start: datetime
+    period_end: datetime
+    success_rate: Decimal = Field(..., ge=0, le=1)
+    trade_count: int = Field(..., ge=0)
+    net_profit: Decimal
+    roi_percentage: Decimal
+    trend_direction: str  # improving, declining, stable
+
+class RiskAdjustedMetrics(BaseModel):
+    """Risk-adjusted performance metrics."""
+    mean_return: Decimal
+    volatility: Decimal = Field(..., ge=0)
+    annualized_return: Decimal
+    annualized_volatility: Decimal = Field(..., ge=0)
+    sharpe_ratio: Optional[Decimal] = None
+    sortino_ratio: Optional[Decimal] = None
+    max_drawdown: Decimal = Field(..., ge=0, le=1)
+    information_ratio: Optional[Decimal] = None
+
+class StatisticalSignificanceTest(BaseModel):
+    """Statistical significance test results."""
+    is_significant: bool
+    p_value: Optional[Decimal] = None
+    z_score: Optional[Decimal] = None
+    confidence_level: float
+    test_method: str
+    null_hypothesis: str
+    alternative_hypothesis: str
+    reason: Optional[str] = None
+
+class PerformanceDataQuality(BaseModel):
+    """Assessment of performance data quality."""
+    quality_score: Decimal = Field(..., ge=0, le=1)
+    issues: List[str] = Field(default_factory=list)
+    is_reliable: bool
+    recommendation: str
+    sample_size: int = Field(..., ge=0)
+    time_span_days: Optional[float] = None
+
 class ROIMetrics(BaseModel):
     roi_percentage: Decimal
     total_invested: Decimal = Field(..., ge=0)
